@@ -92,7 +92,7 @@ class MultiHeadAttention(nn.Module): # Basically 3.2.2 from the paper "Attention
         return result
     
 class FeedForward(nn.Module): # Basically 3.3 from the paper "Attention is All You Need"
-    def __init__(self):
+    def __init__(self,n_embd):
         super().__init__()
         self.net = nn.Sequential( # When called, goes through all of this in order (in sequence haha)
             nn.Linear(n_embd, 4*n_embd), # Paper had an outer layer of 512 and inner layer of 2048, so 4 times
@@ -104,15 +104,24 @@ class FeedForward(nn.Module): # Basically 3.3 from the paper "Attention is All Y
     
     def forward(self,x):
         return self.net(x)
+    
+class DecoderBlock(nn.Module): # Basically 3.3 from the paper "Attention is All You Need"
+    def __init__(self):
+        super().__init__()
+        self.MultiHeadAttention = MultiHeadAttention(n_head,n_embd//n_head)
+        self.FeedForward = FeedForward(n_embd)
+        self.dropout = nn.Dropout(dropout)
+        
 
 class miniGPT(nn.Module):
     def __init__(self):
         super().__init__()
         self.Embedding = nn.Embedding(vocab_size, n_embd)
         self.MultiHeadAttention = MultiHeadAttention(n_head,n_embd//n_head) # 64 embeds times 6 equals the original 384
-        self.FeedForward = FeedForward()
+        self.FeedForward = FeedForward(n_embd)
     
     def forward(self, x):
+        # When coding this, the feedforwad layer just puts x or the input through FeedForward where it runs its thang
         x = self.Embedding(x)
         return x
     
