@@ -9,7 +9,10 @@ from datasets import load_dataset
 # Misc Imports
 import time
 
-print("Program Start: " + time.strftime("%H:%M:%S"), end="\r")
+#docker run -it --rm --device /dev/dxg -v /usr/lib/wsl:/usr/lib/wsl -v c:\Users\saake\OneDrive\Documents\GitHub\miniGPT:/tmp -p 9999:9999 intel/intel-extension-for-pytorch:gpu
+
+print("Program Start: " + time.strftime("%H:%M:%S"), end="\n")
+print(torch.xpu.is_available())
 
 # ----------- This is the main training file of my miniGPT model ------------
 # ---- All torch terms used in this file are explained either in the READ.ME or in an excel sheet, need to finish this first ----
@@ -17,17 +20,18 @@ print("Program Start: " + time.strftime("%H:%M:%S"), end="\r")
 torch.manual_seed(11)
 
 # Hyperparameters
-batch_size = 64 # how many independent sequences will we process in parallel?
+batch_size = 2 # how many independent sequences will we process in parallel?
+# Originall 64, but reducing down for testing purposes
 block_size = 256 # what is the maximum context length for predictions?
-max_iters = 2 # Training iterations
+max_iters = 20 # Training iterations
 eval_interval = 500
 learning_rate = 3e-4 # Controls step size during optimization, lower is more accurate but slower
-device = 'gpu' if torch.cuda.is_available() else 'cpu'
+device = 'xpu' if torch.xpu.is_available() else 'cpu'
 eval_iters = 200
 n_embd = 384
 n_head = 6
 n_layer = 6
-dropout = 0.1 # Dropout used was 0.1 in the paper, could be changed later to 0.2
+dropout = 0.2 # Dropout used was 0.1 in the paper, could be changed later to 0.2
 
 
 #print(torch.__version__)
@@ -91,12 +95,12 @@ class Head(nn.Module): # Basically 3.2.1 from the paper "Attention is All You Ne
         # Defines a matrix size 512x512 with all values below the diagonal set to 1
         B,T,C = x.shape
         rando_init = torch.randn(C,C)
-        tril = torch.tril(torch.ones(T,T))
+        tril = torch.tril(torch.ones(T,T)).to(device)
         key,query,value = self.key(x),self.query(x),self.value(x) # Populates the linear with random values
 
         wei = torch.zeros(C,C)
         wei = key @ query.transpose(-1,-2) * (C**-0.5) # Dot Product of Key and Query Here, divided by the square root of the length of the key to reduce differences between points
-        wei = wei.masked_fill(tril==0, float('-inf')) # Masking upper hald of matrix, for decoder architecture
+        wei = wei.masked_fill(tril==0, float('-inf')).to(device) # Masking upper hald of matrix, for decoder architecture
         wei = F.softmax(wei, dim=-1)
         wei = self.dropout(wei)
         result = wei @ value
@@ -205,23 +209,26 @@ class miniGPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
 
-model = miniGPT()
-m = model.to(device)
+model = miniGPT().to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
 for iter in range(max_iters): # Training loop, iterates through the data
 
-    if iter % eval_interval == 0 or iter == max_iters - 1:
-        losses = estimate_loss()
-        print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-    print("Iteration " + str(iter) + ": " + time.strftime("%H:%M:%S"), end="\r")
+    #if iter % eval_interval == 0 or iter == max_iters - 1:
+    losses = estimate_loss()
+    print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+    print("Iteration " + str(iter) + ": " + time.strftime("%H:%M:%S"), end="\n")
 
     optimizer.zero_grad() # Clearing gradients
     xb,yb = get_batch("train") # Tokenized text, and the next token after that
     logits, loss = model(xb,yb) # Performs the forward pass on the data
-    loss.backward()
-    optimizer.step() #  Perform a single optimization step    
+    if torch.isnan(loss) or torch.isinf(loss):
+        print("Loss is bugging, skipping this iteration")
+    else:
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # Prevents exploding gradients
+        optimizer.step() #  Perform a single optimization step    
 
 context = torch.zeros((1,1), dtype=torch.long).to(device)
-print(decode(m.generate(context,max_new_tokens=500)[0].tolist())) # Generates text based on the model
+print(decode(model.generate(context,max_new_tokens=500)[0].tolist())) # Generates text based on the model
 
