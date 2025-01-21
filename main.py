@@ -20,10 +20,10 @@ print(torch.xpu.is_available())
 torch.manual_seed(11)
 
 # Hyperparameters
-batch_size = 2 # how many independent sequences will we process in parallel?
+batch_size = 64 # how many independent sequences will we process in parallel?
 # Originall 64, but reducing down for testing purposes
 block_size = 256 # what is the maximum context length for predictions?
-max_iters = 20 # Training iterations
+max_iters = 80 # Training iterations
 eval_interval = 500
 learning_rate = 3e-4 # Controls step size during optimization, lower is more accurate but slower
 device = 'xpu' if torch.xpu.is_available() else 'cpu'
