@@ -9,8 +9,6 @@ from datasets import load_dataset
 # Misc Imports
 import time
 
-#docker run -it --rm --device /dev/dxg -v /usr/lib/wsl:/usr/lib/wsl -v c:\Users\saake\OneDrive\Documents\GitHub\miniGPT:/tmp -p 9999:9999 intel/intel-extension-for-pytorch:gpu
-
 print("Program Start: " + time.strftime("%H:%M:%S"), end="\n")
 print(torch.xpu.is_available())
 
@@ -21,7 +19,7 @@ torch.manual_seed(11)
 
 # Hyperparameters
 batch_size = 64 # how many independent sequences will we process in parallel?
-# Originall 64, but reducing down for testing purposes
+# Originally 64, but reducing down for testing purposes
 block_size = 256 # what is the maximum context length for predictions?
 max_iters = 80 # Training iterations
 eval_interval = 500
